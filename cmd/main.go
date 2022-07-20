@@ -11,6 +11,7 @@ import (
 	"regexp"
 
 	"github.com/tidwall/pretty"
+	"github.com/xuri/excelize/v2"
 )
 
 type ProvinceInfo struct {
@@ -47,12 +48,28 @@ const patternSchoolTr = `(?sU)<tr [^>]*>(.*)<\/tr>`
 const patternSchoolTd = `(?sU)<td>(.*)<\/td>\s*<td>(.*)<\/td>\s*<td>(.*)<\/td>\s*<td>(.*)<\/td>`
 
 const patternSchoolMajorsBlock = `(?sU)<table width="100%" class="lgoto"[^>]*>(.*)<\/table>`
-const patternMajorTr = `(?U)<tr [^>]*>(.*)<\/tr>`
+const patternMajorTr = `(?sU)<tr [^>]*>(.*)<\/tr>`
 const patternMajorTd = `(?sU)<td [^>]*>(.*)<\/td>\s*<td [^>]*>(.*)<\/td>\s*<td [^>]*>(.*)<\/td>\s*<td [^>]*>(.*)<\/td>`
 
 func main() {
-	println("Hello, world!")
+	println("【2024年普通高校招生专业选考科目要求】资料导出工具v0.1")
 
+	_, err := os.Stat("majors.json")
+	if err != nil {
+		if os.IsNotExist(err) {
+			println("majors.json not exists")
+			getAllMajors()
+		}
+	}
+
+	Json2Excel()
+	os.Exit(0)
+}
+
+////////////////////////////////
+// 读取所有专业并存储为json文件
+////////////////////////////////
+func getAllMajors() {
 	initUrl := "https://zt.zjzs.net/xk2024/"
 	res, err := http.Get(initUrl)
 
@@ -117,12 +134,12 @@ func main() {
 
 		index := 0
 		for _, school := range schools {
-			if index == 0 {
-				index += 1
-				continue
-			} else {
-				index += 1
-			}
+			// if index == 0 {
+			// 	index += 1
+			// 	continue
+			// } else {
+			// 	index += 1
+			// }
 
 			re = regexp.MustCompile(patternSchoolTd)
 
@@ -141,8 +158,9 @@ func main() {
 
 			schoolsEntry = append(schoolsEntry, aSchool)
 			fmt.Printf("\n\r%d %s", index, aSchool)
-			os.Exit(0)
-			getSchoolMajors(aSchool.Url, province.Name, aSchool.Name)
+
+			getSchoolMajors(aSchool.Url, aSchool.Name, province.Name)
+			//os.Exit(0)
 		}
 
 	}
@@ -174,6 +192,7 @@ func main() {
 /////////////////////////////////
 func getSchoolMajors(url string, schoolName string, provinceName string) {
 	// 打印资源数据
+	fmt.Printf("\n now process school %s", schoolName)
 	content, err := ReadUrl(url)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "fetch: reading %s: %v\n", url, err)
@@ -183,11 +202,11 @@ func getSchoolMajors(url string, schoolName string, provinceName string) {
 	re := regexp.MustCompile(patternSchoolMajorsBlock)
 
 	result := re.FindString(content)
-
+	//fmt.Printf("\n\rfind:%s", result)
 	re = regexp.MustCompile(patternMajorTr)
 
 	majors := re.FindAllString(result, -1)
-
+	//fmt.Printf("\n\rfind:%d", len(majors))
 	index := 0
 	for _, major := range majors {
 		if index == 0 {
@@ -238,4 +257,48 @@ func ReadUrl(url string) (string, error) {
 	}
 
 	return string(body), nil
+}
+
+func Json2Excel() {
+	filename := "majors.json"
+	content, err := os.ReadFile(filename)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+
+	var majors []MajorInfo
+	err = json.Unmarshal(content, &majors)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+
+	f := excelize.NewFile()
+
+	f.SetCellValue("Sheet1", "A1", "省份")
+	f.SetCellValue("Sheet1", "B1", "院校名称")
+	f.SetCellValue("Sheet1", "C1", "专业（类）名称")
+	f.SetCellValue("Sheet1", "D1", "类中所含专业")
+	f.SetCellValue("Sheet1", "E1", "层次")
+	f.SetCellValue("Sheet1", "F1", "选科科目要求")
+
+	lineNo := 2
+	for _, major := range majors {
+		fmt.Printf("\n\r%s", major)
+		f.SetCellValue("Sheet1", fmt.Sprintf("A%d", lineNo), major.Area)
+		f.SetCellValue("Sheet1", fmt.Sprintf("B%d", lineNo), major.SchoolName)
+		f.SetCellValue("Sheet1", fmt.Sprintf("C%d", lineNo), major.Name)
+		f.SetCellValue("Sheet1", fmt.Sprintf("D%d", lineNo), major.Subjects)
+		f.SetCellValue("Sheet1", fmt.Sprintf("E%d", lineNo), major.Level)
+		f.SetCellValue("Sheet1", fmt.Sprintf("F%d", lineNo), major.Requests)
+
+		lineNo += 1
+	}
+
+	if err := f.SaveAs("2024年普通高校招生专业选考科目要求.xlsx"); err != nil {
+		fmt.Println(err)
+	}
+
+	fmt.Println("done")
 }
