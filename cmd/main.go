@@ -40,7 +40,7 @@ var schoolsEntry = []SchoolInfo{}
 var majorsEntry = []MajorInfo{}
 
 const patternProvincesBlock = `(?sU)<table class="linner"[^>]*>(.*)<\/table>`
-const patternHref = `<a href='([^>]*)'\s*>(.*)<\/a>`
+const patternHref = `<a href='(area_\d+\.html)'\s*[^>]*>(.*)<\/a>`
 const patternHref2 = `<a href="([^>]*)" target="_blank"\s*>(.*)<\/a>`
 
 const patternSchoolsBlock = `(?sU)<table class="lsch"[^>]*>(.*)<\/table>`
